@@ -4,6 +4,7 @@ import subprocess
 from moviepy.editor import VideoFileClip
 import whisper
 import datetime
+from googletrans import Translator
 
 # Load the Whisper model
 model = whisper.load_model("base")
@@ -16,6 +17,14 @@ def extract_audio(video_file):
         audio_file = f"{os.path.splitext(video_file)[0]}.wav"
         video.audio.write_audiofile(audio_file, codec='pcm_s16le')
     return audio_file
+
+
+# Function for translation to Chinese
+translator = Translator()
+
+
+def translate_text(text, dest_language):
+    return translator.translate(text, dest=dest_language).text
 
 # Function to transcribe audio and generate SRT subtitles
 
@@ -45,6 +54,37 @@ def transcribe_to_srt(audio_file):
 
     return srt_filename
 
+# Function to transcribe + translate
+
+
+def transcribe_and_translate_to_srt(audio_file, dest_language='zh-cn'):
+    print(f"Starting transcription and translation for {audio_file}")
+    result = model.transcribe(audio_file)
+    print(f"Transcription completed for {audio_file}")
+
+    srt_filename = f"{os.path.splitext(audio_file)[0]}.srt"
+    print(f"Creating SRT file {srt_filename}")
+
+    with open(srt_filename, "w") as f:
+        for i, segment in enumerate(result["segments"]):
+            start_time = datetime.timedelta(seconds=segment['start'])
+            end_time = datetime.timedelta(seconds=segment['end'])
+            original_text = segment['text']
+            translated_text = translate_text(original_text, dest_language)
+
+            f.write(f"{i+1}\n")
+            f.write(
+                f"{str(start_time).split('.')[0]} --> {str(end_time).split('.')[0]}\n")
+            f.write(f"{translated_text}\n\n")
+
+    print(f"SRT file created and translated for {audio_file}")
+
+    os.remove(audio_file)  # Clean up audio file after processing
+    print(f"Audio file removed for {audio_file}")
+
+    return srt_filename
+
+
 # Function to add subtitles to a video
 
 
@@ -62,7 +102,7 @@ def add_subtitles_to_video(video_file, srt_file):
 # Process all video files in the current directory
 for video_file in glob.glob("*.mp4"):
     audio_file = extract_audio(video_file)
-    srt_file = transcribe_to_srt(audio_file)
+    srt_file = transcribe_and_translate_to_srt(audio_file)
     # Error in opening video
     # add_subtitles_to_video(video_file, srt_file)
 
