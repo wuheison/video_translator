@@ -7,6 +7,7 @@ import datetime
 from googletrans import Translator
 import time
 from tqdm import tqdm
+import json
 
 # Load the Whisper model
 model = whisper.load_model("base")
@@ -56,49 +57,54 @@ def transcribe_to_srt(audio_file):
 
     return srt_filename
 
+
+
 # Function to transcribe + translate
 
 
-import time
-
-# Function to transcribe + translate
 def transcribe_and_translate_to_srt(audio_file, dest_language='zh-TW'):
-    start_time = datetime.datetime.now()
-    local_start_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time.timestamp()))
-
-    print(f"Starting transcription and translation for {audio_file} at {local_start_time}")
+    print(f"Starting transcription for {audio_file}")
     result = model.transcribe(audio_file, verbose=True)
     print(f"Transcription completed for {audio_file}")
+
+    # Serialize the result to a JSON file
+    intermediate_file = f"{os.path.splitext(audio_file)[0]}_transcription.json"
+    with open(intermediate_file, "w", encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False)
 
     srt_filename = f"{os.path.splitext(audio_file)[0]}.srt"
     print(f"Creating SRT file {srt_filename}")
 
-    with open(srt_filename, "w") as f:
+    # Read from the intermediate file
+    with open(intermediate_file, "r", encoding='utf-8') as f:
+        result = json.load(f)
+
+    with open(srt_filename, "wb") as f:
         for i, segment in enumerate(tqdm(result["segments"], desc="Transcribing and translating")):
             start_time_segment = datetime.timedelta(seconds=segment['start'])
             end_time_segment = datetime.timedelta(seconds=segment['end'])
             original_text = segment['text']
-            try:
-                translated_text = translate_text(original_text, dest_language)
-            except Exception as e:
-                print(f"An error occurred during translation: {e}")
-            # Add a delay between translation requests
-            time.sleep(1)  # Adjust the delay as necessary
-
-            f.write(f"{i+1}\n")
-            f.write(f"{str(start_time_segment).split('.')[0]} --> {str(end_time_segment).split('.')[0]}\n")
-            f.write(f"{translated_text}\n\n")
+            translated_text = None
+            attempts = 0
+            while translated_text is None and attempts < 10:
+                try:
+                    translated_text = translate_text(original_text, dest_language)
+                except Exception as e:
+                    print(f"An error occurred during translation: {e}, will try again")
+                    attempts += 1
+                    time.sleep(1)  # Adjust the delay as necessary
+            if translated_text is None:
+                print(f"Failed to translate segment {i} after 10 attempts.")
+                continue
+            f.write((f"{i+1}\n").encode('utf-8'))
+            f.write((f"{str(start_time_segment).split('.')[0]} --> {str(end_time_segment).split('.')[0]}\n").encode('utf-8'))
+            f.write((f"{translated_text}\n\n").encode('utf-8'))
 
     print(f"SRT file created and translated for {audio_file}")
 
-    os.remove(audio_file)
-    end_time = datetime.datetime.now()
-
-    local_end_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time.timestamp()))
-
-    duration = (end_time - start_time).total_seconds
-    print(f"Transcription and translation completed for {audio_file} at {local_end_time}")
-    print(f"Total time taken: {duration} seconds")
+    # Delete the intermediate file
+    #os.remove(intermediate_file)
+    #print(f"Intermediate file removed for {audio_file}")
 
     return srt_filename
 
