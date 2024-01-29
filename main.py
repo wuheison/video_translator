@@ -64,7 +64,7 @@ def transcribe_to_srt(audio_file):
 
 def transcribe_and_translate_to_srt(audio_file, dest_language='zh-TW'):
     print(f"Starting transcription for {audio_file}")
-    result = model.transcribe(audio_file, verbose=True)
+    result = model.transcribe(audio_file, verbose=True, language="ja", task="translate")
     print(f"Transcription completed for {audio_file}")
 
     # Serialize the result to a JSON file
